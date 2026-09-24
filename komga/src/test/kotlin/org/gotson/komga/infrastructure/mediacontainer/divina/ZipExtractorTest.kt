@@ -2,16 +2,13 @@ package org.gotson.komga.infrastructure.mediacontainer.divina
 
 import org.apache.tika.config.TikaConfig
 import org.assertj.core.api.Assertions.assertThat
-import org.gotson.komga.domain.model.Dimension
-import org.gotson.komga.infrastructure.image.ImageAnalyzer
 import org.gotson.komga.infrastructure.mediacontainer.ContentDetector
 import org.junit.jupiter.api.Test
 import org.springframework.core.io.ClassPathResource
 
 class ZipExtractorTest {
   private val contentDetector = ContentDetector(TikaConfig())
-  private val imageAnalyzer = ImageAnalyzer()
-  private val zipExtractor = ZipExtractor(contentDetector, imageAnalyzer)
+  private val zipExtractor = ZipExtractor(contentDetector)
 
   @Test
   fun `given zip file when parsing for entries then returns all images`() {
@@ -23,7 +20,9 @@ class ZipExtractorTest {
     with(entries.first()) {
       assertThat(name).isEqualTo("komga.png")
       assertThat(mediaType).isEqualTo("image/png")
-      assertThat(dimension).isEqualTo(Dimension(48, 48))
+      // CUSTOM FORK: dimension is no longer read (zero I/O per entry), so it is always null.
+      // The mediaType is resolved from the entry NAME instead of its content.
+      assertThat(dimension).isNull()
       assertThat(fileSize).isEqualTo(3108)
     }
   }

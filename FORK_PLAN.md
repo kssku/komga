@@ -343,6 +343,76 @@ PasswordEncoderConfiguration.kt:15   TokenEncoder { Sha512DigestUtils.shaHex(raw
 
 ---
 
+## 8. 第二项改造：`ZipExtractor` 零 I/O 条目枚举
+
+### 8.1 问题（CD2/115 FUSE 场景下最大单点开销）
+
+上游 `ZipExtractor.getEntries` 对**每个条目**都：
+
+```kotlin
+zip.getInputStream(entry).buffered().use { stream ->   // ← 每条目一次 open
+  val mediaType = contentDetector.detectMediaType(stream)  // 读魔数
+  val dimension = if (analyzeDimensions && isImage) imageAnalyzer.getDimension(stream)
+  ...
+}
+```
+
+在 CloudDrive2 挂载的 115 网盘上，**每次 `open` 是数百毫秒的网络往返**。
+一本 200 页的 CBZ = **200 次 open**，仅为了构建页面列表。
+
+### 8.2 改动
+
+| 文件 | 改动 |
+|---|---|
+| `ContentDetector.kt` | 新增 `detectMediaTypeByName(fileName)` —— Tika `mimeRepository.getMimeType()` **纯内存查表，零 I/O** |
+| `ZipExtractor.kt` | 去掉 `getInputStream`，`mediaType` 取自**条目名**；`dimension` 恒为 `null`；构造参数去掉 `imageAnalyzer` |
+
+**`entry.size` 本就不需要读取** —— 它来自 ZIP 中央目录，`setPath()` 时已加载。
+
+### 8.3 ⚠️ 三项必须正视的代价
+
+| # | 代价 | 实情评估 |
+|---|---|---|
+| 1 | **`dimension` 恒为 null** | 阅读器无法预知页面尺寸。**已确认可接受** —— 本库 7,899,110 页全部是同一格式 |
+| 2 | **按文件名判类型** | 名实不符的文件会被误判。**本库不构成风险** —— 全部 `.jpg` → `image/jpeg`，与读魔数结果一致 |
+| 3 | **加密 ZIP 会静默变 READY** | **已修，见 §8.4** |
+
+**为什么方案 2 在本库成立**：实测 `MEDIA_PAGE.FILE_NAME` 的扩展名分布 = **`jpg` × 7,899,110（100%）**，
+`BOOK_PAGE` 的 `mediaType` 分布 = **`image/jpeg` × 7,899,110（100%）**。
+**库是均质的**，文件名与内容类型不存在分歧。换到异构库（含 `.avif`/`.jxl`/无扩展名）**不能照搬此方案**。
+
+> Tika 的 `getMimeType(name)` 实测覆盖 `.jpg/.png/.webp/.gif/.avif/.jxl/.heic/.tiff` 等，
+> 未知扩展名返回 `application/octet-stream`（**不返回 null**）。
+
+### 8.4 加密 ZIP 的处理（本次暴露并修复的真实缺陷）
+
+**问题**：加密 ZIP 的条目名与尺寸在中央目录里是**明文可见**的。上游靠「解密失败 → 判不出图片 → 无页面 → `ERROR`」发现加密包；
+改成按名判断后，这条路径消失 → 加密包被标为 **`READY`**，直到**阅读时**才失败 ——
+**把「导入时明确报错」降级成了「运行时静默失败」**。
+
+**修法**：中央目录的 `generalPurposeBit.usesEncryption()`（flag bit 0）**零 I/O** 可读：
+
+```kotlin
+if (entries.any { it.generalPurposeBit.usesEncryption() }) {
+  throw IllegalStateException("Encrypted ZIP archives are not supported")
+}
+```
+
+**为什么抛 `IllegalStateException` 而非 `MediaUnsupportedException`**：
+后者会被 `BookAnalyzer` 映射为 `UNSUPPORTED`（RAR 加密走的就是这条路，`ERR_1002`），
+但 `BookAnalyzerTest` 对加密 ZIP 期望的是 **`ERROR`**。抛通用异常 → 落到
+`catch (ex: Exception)` → `ERROR` + `ERR_1008`，**与上游状态一致**。
+
+### 8.5 验证
+
+| 项 | 结果 |
+|---|---|
+| `compileKotlin` | ✅ exit 0 |
+| `BookAnalyzerTest` + `divina.*` | ✅ **BUILD SUCCESSFUL**（含加密 ZIP 用例） |
+| `ZipExtractorTest` | ✅ 已同步（构造参数、`dimension` 断言改为 `null`） |
+
+---
+
 ## 附录：验证脚本
 
 对拍数据与脚本见 `komga-notes/legacy-inject/`：
