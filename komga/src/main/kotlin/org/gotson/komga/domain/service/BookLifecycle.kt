@@ -105,12 +105,14 @@ class BookLifecycle(
   }
 
   fun hashAndPersist(book: Book) {
-    if (!libraryRepository.findById(book.libraryId).hashFiles)
+    val library = libraryRepository.findById(book.libraryId)
+    if (!library.hashFiles)
       return logger.info { "File hashing is disabled for the library, it may have changed since the task was submitted, skipping" }
 
     logger.info { "Hash and persist book: $book" }
     if (book.fileHash.isBlank()) {
-      val hash = hasher.computeHash(book.path)
+      // CUSTOM FORK (feat/sha1-relpath-hash): path-relative hash, no file I/O.
+      val hash = hasher.computePathHash(book.path, library.root)
       bookRepository.update(book.copy(fileHash = hash))
     } else {
       logger.info { "Book already has a hash, skipping" }

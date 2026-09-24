@@ -148,8 +148,8 @@ class LibraryContentLifecycle(
           logger.info { "Adding new series: $newSeries" }
           val createdSeries = seriesLifecycle.createSeries(newSeries)
           seriesLifecycle.addBooks(createdSeries, newBooks)
-          tryRestoreSeries(createdSeries, newBooks)
-          tryRestoreBooks(newBooks)
+          tryRestoreSeries(library, createdSeries, newBooks)
+          tryRestoreBooks(library, newBooks)
           seriesToSortAndRefresh.add(createdSeries)
         } else {
           // if series already exists, update it
@@ -172,7 +172,8 @@ class LibraryContentLifecycle(
                 if (newBook.fileLastModified.notEquals(existingBook.fileLastModified)) {
                   val hash =
                     if (existingBook.fileSize == newBook.fileSize && existingBook.fileHash.isNotBlank()) {
-                      hasher.computeHash(newBook.path)
+                      // CUSTOM FORK (feat/sha1-relpath-hash): path-relative hash, no file I/O.
+                      hasher.computePathHash(newBook.path, library.root)
                     } else {
                       null
                     }
@@ -209,7 +210,7 @@ class LibraryContentLifecycle(
             val booksToAdd = newBooks.filterNot { newBook -> existingBooksUrls.contains(newBook.url) }
             logger.info { "Adding new books: $booksToAdd" }
             seriesLifecycle.addBooks(existingSeries, booksToAdd)
-            tryRestoreBooks(booksToAdd)
+            tryRestoreBooks(library, booksToAdd)
             seriesToSortAndRefresh.add(existingSeries)
           }
         }
@@ -278,6 +279,7 @@ class LibraryContentLifecycle(
    * - all books, via #tryRestoreBooks
    */
   private fun tryRestoreSeries(
+    library: Library,
     newSeries: Series,
     newBooks: List<Book>,
   ) {
@@ -300,7 +302,8 @@ class LibraryContentLifecycle(
     logger.debug { "Deleted series candidates: $deletedCandidates" }
 
     if (deletedCandidates.isNotEmpty()) {
-      val newBooksWithHash = newBooks.map { book -> bookRepository.findByIdOrNull(book.id)!!.copy(fileHash = hasher.computeHash(book.path)) }
+      // CUSTOM FORK (feat/sha1-relpath-hash): path-relative hash, no file I/O.
+      val newBooksWithHash = newBooks.map { book -> bookRepository.findByIdOrNull(book.id)!!.copy(fileHash = hasher.computePathHash(book.path, library.root)) }
       bookRepository.update(newBooksWithHash)
 
       val match =
@@ -340,7 +343,7 @@ class LibraryContentLifecycle(
               )
             }
 
-          tryRestoreBooks(newBooksWithHash)
+          tryRestoreBooks(library, newBooksWithHash)
 
           // delete upgraded series
           seriesLifecycle.deleteMany(listOf(match.first))
@@ -359,7 +362,10 @@ class LibraryContentLifecycle(
    * - Read Lists
    * - Metadata. The metadata title will only be copied if locked. If not locked, the filename is used, but a refresh for Title will be requested.
    */
-  private fun tryRestoreBooks(newBooks: List<Book>) {
+  private fun tryRestoreBooks(
+    library: Library,
+    newBooks: List<Book>,
+  ) {
     logger.info { "Try to restore books: $newBooks" }
     newBooks.forEach { bookToAdd ->
       // try to find a deleted book that matches the file size
@@ -372,7 +378,8 @@ class LibraryContentLifecycle(
           if (bookToAdd.fileHash.isNotBlank())
             bookToAdd
           else
-            bookRepository.findByIdOrNull(bookToAdd.id)!!.copy(fileHash = hasher.computeHash(bookToAdd.path)).also { bookRepository.update(it) }
+            // CUSTOM FORK (feat/sha1-relpath-hash): path-relative hash, no file I/O.
+            bookRepository.findByIdOrNull(bookToAdd.id)!!.copy(fileHash = hasher.computePathHash(bookToAdd.path, library.root)).also { bookRepository.update(it) }
 
         val match = deletedCandidates.find { it.fileHash == bookWithHash.fileHash }
 
