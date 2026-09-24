@@ -194,7 +194,7 @@ class LibraryContentLifecycleTest(
       val allBooks = bookRepository.findAll()
 
       verify(exactly = 2) { mockScanner.scanRootFolder(any()) }
-      verify(exactly = 0) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 0) { mockHasher.computePathHash(any(), any()) }
 
       assertThat(allSeries).hasSize(1)
       assertThat(allBooks).hasSize(1)
@@ -231,7 +231,7 @@ class LibraryContentLifecycleTest(
       val allBooks = bookRepository.findAll()
 
       verify(exactly = 2) { mockScanner.scanRootFolder(any()) }
-      verify(exactly = 0) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 0) { mockHasher.computePathHash(any(), any()) }
 
       assertThat(allSeries).hasSize(1)
       assertThat(allBooks).hasSize(1)
@@ -261,7 +261,7 @@ class LibraryContentLifecycleTest(
         mediaRepository.update(mediaRepository.findById(book.id).copy(status = Media.Status.READY))
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "hashed"
+      every { mockHasher.computePathHash(any(), any()) } returns "hashed"
 
       // when
       libraryContentLifecycle.scanRootFolder(library)
@@ -271,7 +271,7 @@ class LibraryContentLifecycleTest(
       val allBooks = bookRepository.findAll()
 
       verify(exactly = 2) { mockScanner.scanRootFolder(any()) }
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
 
       assertThat(allSeries).hasSize(1)
       assertThat(allBooks).hasSize(1)
@@ -402,7 +402,7 @@ class LibraryContentLifecycleTest(
       libraryContentLifecycle.scanRootFolder(library)
 
       every { mockAnalyzer.analyze(any(), any()) } returns Media(status = Media.Status.READY, mediaType = "application/zip", pages = mutableListOf(makeBookPage("1.jpg"), makeBookPage("2.jpg")), bookId = book1.id)
-      every { mockHasher.computeHash(any<Path>()) }.returnsMany("abc", "def")
+      every { mockHasher.computePathHash(any(), any()) }.returnsMany("abc", "def")
 
       bookRepository.findAll().map {
         bookLifecycle.analyzeAndPersist(it)
@@ -415,7 +415,7 @@ class LibraryContentLifecycleTest(
       // then
       verify(exactly = 2) { mockScanner.scanRootFolder(any()) }
       verify(exactly = 1) { mockAnalyzer.analyze(any(), any()) }
-      verify(exactly = 2) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 2) { mockHasher.computePathHash(any(), any()) }
 
       bookRepository.findAll().first().let { book ->
         assertThat(book.lastModifiedDate).isNotEqualTo(book.createdDate)
@@ -573,7 +573,7 @@ class LibraryContentLifecycleTest(
         bookLifecycle.addThumbnailForBook(ThumbnailBook(ByteArray(10), type = ThumbnailBook.Type.USER_UPLOADED, mediaType = "image/jpeg", fileSize = 10L, dimension = Dimension(1, 1), bookId = it.id), MarkSelectedPreference.YES)
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       libraryContentLifecycle.scanRootFolder(library) // deletion
 
@@ -625,7 +625,7 @@ class LibraryContentLifecycleTest(
       }
 
       val slot = slot<Path>()
-      every { mockHasher.computeHash(capture(slot)) } answers {
+      every { mockHasher.computePathHash(capture(slot), any()) } answers {
         "HASH-${slot.captured.nameWithoutExtension}"
       }
 
@@ -685,13 +685,13 @@ class LibraryContentLifecycleTest(
         bookLifecycle.addThumbnailForBook(ThumbnailBook(url = URL("file:/sidecar"), type = ThumbnailBook.Type.SIDECAR, bookId = book.id, fileSize = 0, mediaType = "", dimension = Dimension(0, 0)), MarkSelectedPreference.NO)
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
 
       val allSeries = seriesRepository.findAll()
       val allBooks = bookRepository.findAll().sortedBy { it.number }
@@ -731,13 +731,13 @@ class LibraryContentLifecycleTest(
         bookLifecycle.addThumbnailForBook(ThumbnailBook(url = URL("file:/sidecar"), type = ThumbnailBook.Type.SIDECAR, bookId = book.id, fileSize = 0, mediaType = "", dimension = Dimension(0, 0)), MarkSelectedPreference.NO)
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
 
       val allSeries = seriesRepository.findAll()
       val allBooks = bookRepository.findAll().sortedBy { it.number }
@@ -774,13 +774,13 @@ class LibraryContentLifecycleTest(
         bookLifecycle.markReadProgressCompleted(it.id, user)
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
 
       val allSeries = seriesRepository.findAll()
       val allBooks = bookRepository.findAll().sortedBy { it.number }
@@ -817,13 +817,13 @@ class LibraryContentLifecycleTest(
         readListLifecycle.addReadList(ReadList("read list", bookIds = listOf(it.id).toIndexedMap()))
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
 
       val allSeries = seriesRepository.findAll()
       val allBooks = bookRepository.findAll().sortedBy { it.number }
@@ -867,13 +867,13 @@ class LibraryContentLifecycleTest(
         )
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
       verify(exactly = 0) { mockTaskEmitter.refreshBookMetadata(bookRenamed, setOf(BookMetadataPatchCapability.TITLE)) }
 
       val allSeries = seriesRepository.findAll()
@@ -911,13 +911,13 @@ class LibraryContentLifecycleTest(
         bookRepository.update(it.copy(fileHash = "sameHash"))
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
       verify(exactly = 1) { mockTaskEmitter.refreshBookMetadata(withArg<Book> { assertThat(it.id).isEqualTo(bookRenamed.id) }, setOf(BookMetadataPatchCapability.TITLE)) }
 
       val allSeries = seriesRepository.findAll()
@@ -954,13 +954,13 @@ class LibraryContentLifecycleTest(
         mediaRepository.findById(book.id).let { mediaRepository.update(it.copy(status = Media.Status.READY)) }
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
 
       val allSeries = seriesRepository.findAll()
       val allBooks = bookRepository.findAll().sortedBy { it.number }
@@ -1006,13 +1006,13 @@ class LibraryContentLifecycleTest(
         mediaRepository.findById(book.id).let { mediaRepository.update(it.copy(status = Media.Status.READY)) }
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 1) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 1) { mockHasher.computePathHash(any(), any()) }
 
       val allSeries = seriesRepository.findAll()
       val allBooks = bookRepository.findAll().sortedBy { it.number }
@@ -1066,7 +1066,7 @@ class LibraryContentLifecycleTest(
         mediaRepository.update(mediaRepository.findById(it.id).copy(status = Media.Status.READY))
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
@@ -1120,7 +1120,7 @@ class LibraryContentLifecycleTest(
         bookLifecycle.markReadProgressCompleted(it.id, user)
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
@@ -1176,7 +1176,7 @@ class LibraryContentLifecycleTest(
         readListLifecycle.addReadList(ReadList("read list", bookIds = listOf(it.id).toIndexedMap()))
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
@@ -1238,7 +1238,7 @@ class LibraryContentLifecycleTest(
         )
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
@@ -1297,7 +1297,7 @@ class LibraryContentLifecycleTest(
         bookRepository.update(it.copy(fileHash = "sameHash"))
       }
 
-      every { mockHasher.computeHash(any<Path>()) } returns "sameHash"
+      every { mockHasher.computePathHash(any(), any()) } returns "sameHash"
 
       // when
       libraryContentLifecycle.scanRootFolder(library) // rename
@@ -1348,7 +1348,7 @@ class LibraryContentLifecycleTest(
       }
 
       val slot = slot<Path>()
-      every { mockHasher.computeHash(capture(slot)) } answers {
+      every { mockHasher.computePathHash(capture(slot), any()) } answers {
         "HASH-${slot.captured.nameWithoutExtension}"
       }
 
@@ -1356,7 +1356,7 @@ class LibraryContentLifecycleTest(
       libraryContentLifecycle.scanRootFolder(library) // rename
 
       // then
-      verify(exactly = 2) { mockHasher.computeHash(any<Path>()) }
+      verify(exactly = 2) { mockHasher.computePathHash(any(), any()) }
 
       val allSeries = seriesRepository.findAll()
       val allBooks = bookRepository.findAll().sortedBy { it.number }
@@ -1397,7 +1397,7 @@ class LibraryContentLifecycleTest(
       }
 
       val slot = slot<Path>()
-      every { mockHasher.computeHash(capture(slot)) } answers {
+      every { mockHasher.computePathHash(capture(slot), any()) } answers {
         "HASH-${slot.captured.nameWithoutExtension}"
       }
 
@@ -1445,7 +1445,7 @@ class LibraryContentLifecycleTest(
       }
 
       val slot = slot<Path>()
-      every { mockHasher.computeHash(capture(slot)) } answers {
+      every { mockHasher.computePathHash(capture(slot), any()) } answers {
         "HASH-${slot.captured.nameWithoutExtension}"
       }
 
@@ -1493,7 +1493,7 @@ class LibraryContentLifecycleTest(
       }
 
       val slot = slot<Path>()
-      every { mockHasher.computeHash(capture(slot)) } answers {
+      every { mockHasher.computePathHash(capture(slot), any()) } answers {
         "HASH-${slot.captured.nameWithoutExtension}"
       }
 
@@ -1538,7 +1538,7 @@ class LibraryContentLifecycleTest(
       }
 
       val slot = slot<Path>()
-      every { mockHasher.computeHash(capture(slot)) } answers {
+      every { mockHasher.computePathHash(capture(slot), any()) } answers {
         "HASH-${slot.captured.nameWithoutExtension}"
       }
 

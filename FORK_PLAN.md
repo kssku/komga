@@ -316,7 +316,28 @@ PasswordEncoderConfiguration.kt:15   TokenEncoder { Sha512DigestUtils.shaHex(raw
 
 理由：统一哈希体系，避免同库内混用两种算法。代价可控 —— 它是**采样哈希**（`KomgaProperties.pageHashing = 3`，前后各 3 页），不是全部 788 万页。迁移清空后由 `PageHashLifecycle` 懒重算。
 
-### 7.4 `SYNC_POINT_BOOK.BOOK_FILE_HASH` —— 明确不动
+### 7.4 测试 mock 必须同步更新（**已踩到**）
+
+改 `Hasher` 的调用形态后，`LibraryContentLifecycleTest.kt` 里 **35 处 mock** 全部失效：
+
+```
+改前： every { mockHasher.computeHash(any<Path>()) } returns "..."
+改后： every { mockHasher.computePathHash(any(), any()) } returns "..."
+
+报错： io.mockk.MockKException: no answer found for
+       Hasher.computePathHash(/book1, file:/default)
+       among the configured answers: (Hasher.computeHash(slotCapture<Path>()))
+```
+
+**22 个测试失败，全部是这一个原因** —— MockK 严格模式找不到匹配的 mock 答案就抛异常。
+
+修复：35 处全部改成 `computePathHash(any(), any())`，其中 6 处 `capture(slot)` 的形式改为
+`computePathHash(capture(slot), any())`（只捕获第一个参数，第二个用 `any()`）。
+
+> 教训：**改方法签名 = 必须同步改测试 mock**。`compileKotlin` 只编译 main 源集，
+> 不会发现测试里的 mock 失配 —— 只有跑测试才会暴露。
+
+### 7.5 `SYNC_POINT_BOOK.BOOK_FILE_HASH` —— 明确不动
 
 该列须与 Kobo 设备端一致，改算法会破坏所有 Kobo 同步点。迁移脚本中**特意排除**。
 
