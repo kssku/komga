@@ -42,34 +42,56 @@
   三条已合入 master 的 `feat/*` 分支一并清理
 
 ## 部署
-- 库根：`/opt/clouddrive2/115open/comic`
+- 库根：`/opt/clouddrive2/115open/content`（**不是** `.../comic`，那个路径不存在；
+  取 `content/` 而非 `content/wnacg/` 才能让相对路径与 LANraragi 一致）
 - 平台：Dell MX Linux，裸 jar，端口 25600
 - 与 LANraragi 挂载同一份数据，两边文件身份互通
 
-## 构建状态：**未通过**（已知问题）
+## 构建状态：**通过** ✅
 
-> ⚠️ **本版本没有产出可运行的 jar。**版本号、文档、代码是真实的，但构建未验证通过。
+**产物**（2026-10-09 实测）：
+
+| 文件 | 大小 |
+|------|------|
+| `komga/build/libs/komga-1.0.0.jar`（bootJar） | 117 MB |
+| `komga/build/libs/komga-1.0.0-plain.jar` | 3.7 MB |
+| `komga-tray/build/libs/komga-tray-1.0.0.jar` | 58 KB |
 
 **环境**：Gradle 9.6.1 / Kotlin 2.4.10 / JDK 21.0.12
 
-**唯一失败任务**：` :komga:kspKotlin `（KSP failed with exit code: PROCESSING_ERROR）
+**出包命令**（照抄上游 release.yml）：
 
-**现象**：KSP 处理阶段对 89 处 `@Deprecated` 标注报 `Deprecated code should be removed`，
-分布在上游刻意保留的 v1 兼容 API（`ReferentialV1Controller.kt`、`ReferentialDao.kt`、
-`SeriesController.kt` 等 10 个文件）。**这些都是上游代码，非本分支改动。**
+```bash
+./gradlew :komga:webuiCopyIndex :komga:nextuiCopyIndex :komga:bootJar :komga-tray:jar
+```
 
-**已排除的原因**：
-- 不是 ktlint（报错格式不符，且 `.editorconfig` 无相关配置）
-- 不是 Kotlin 编译选项（项目脚本里无 `allWarningsAsErrors` / `-Werror`）
-- 不是本分支引入（本分支仅改版本号/README/CHANGELOG 三个文件）
+### 曾经的构建失败与根因（教训）
 
-**已做的修复（保留）**：`komga/build.gradle.kts` 中给 `kspKotlin` 补了
-`dependsOn("generateTasksJooq")` —— 上游从 kapt 迁到 ksp 时漏了这一条，
-Gradle 9 将隐式依赖升级为硬失败。此修复有效（原隐式依赖报错消失），
-但 KSP 处理错误依然存在。
+本分支首次出包时 `:komga:kspKotlin` 报 `PROCESSING_ERROR`，89 处上游
+`@Deprecated` 被判为 error。**根因不是 KSP 版本错配，也不是上游 bug，
+而是本分支把版本号从 `1.27.0` 改成 `1.0.0` 意外触发了一条沉睡的构建分支：**
 
-**下一步方向（未验证）**：排查 KSP processor 为何把 deprecation 诊断为 error，
-可能需要 `ksp { arg(...) }` 传参或升级 KSP 版本。
+```kotlin
+// komga/build.gradle.kts（上游原文）
+if (version.toString().endsWith(".0.0")) {
+  ksp("com.github.gotson.bestbefore:bestbefore-processor-kotlin:0.2.0")
+}
+```
+
+上游版本号一直是 `1.x.y`，此条件**恒假**，那个注解处理器从未被加载，
+KSP 任务是空跑。改成 `1.0.0` 后条件首次为真，processor 开始扫描全项目注解，
+在 Kotlin 2.4 的严格模式下把兼容性 API 的 deprecation 诊断为 error。
+
+**修复（本分支）**：把「发布版本号」与「是否启用该 processor」解耦，
+默认关闭（与上游 1.x 的实际行为一致），需要时显式开启：
+
+```bash
+./gradlew ... -Pbestbefore=true
+```
+
+**附带保留的有效修复**：`komga/build.gradle.kts` 里给 `kspKotlin` 补了
+`dependsOn("generateTasksJooq")`——上游从 kapt 迁到 ksp 时漏了这一条，
+Gradle 9 会把隐式依赖升级为硬失败。
 
 ---
 

@@ -123,7 +123,13 @@ dependencies {
   implementation("org.xerial:sqlite-jdbc:${libs.versions.sqliteJdbc.get()}")
   jooqGenerator("org.xerial:sqlite-jdbc:${libs.versions.sqliteJdbc.get()}")
 
-  if (version.toString().endsWith(".0.0")) {
+  // FIX(fork): upstream gated this processor on the release version ending in ".0.0",
+  // which conflated the published version with a build switch. Once this fork set
+  // version=1.0.0 the gate opened for the first time and the processor started
+  // flagging ~89 upstream @Deprecated sites as errors under Kotlin 2.4. Decouple the
+  // two: default off (matching upstream's de-facto behaviour on 1.x), opt in with
+  // -Pbestbefore=true when the annotation processor is actually wanted.
+  if (providers.gradleProperty("bestbefore").orNull == "true") {
     ksp("com.github.gotson.bestbefore:bestbefore-processor-kotlin:0.2.0")
   }
 
