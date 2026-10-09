@@ -1,3 +1,53 @@
+# Komga（个人独立分支）1.0.0
+
+> 本分支基于 [gotson/komga](https://github.com/gotson/komga) 独立分叉，专为**网盘挂载场景**
+> （115 网盘 / CloudDrive2 FUSE）改造，与上游各自演进。
+> 自本版本起版本号与上游**脱钩**，本文件上半部分只记录本分支变更。
+> 上游完整历史保留在下方（自 1.27.0 起回溯）。
+
+## 新增（相对上游）
+
+### SHA-1 相对路径哈希（零 I/O 文件身份）
+- 文件身份由「读文件内容哈希」改为 `SHA1(UTF-8(相对路径))`，扫描路径上**零文件读取**
+- 相对基准取**库根的父目录**，使哈希与 LANraragi 的 `compute_id` 逐字节一致
+- `Hasher.kt` 新增 `computePathHash()`；`computeHash(String)` 显式指定 UTF-8
+- 迁移脚本 `V20260924120000__sha1_relpath_hash.sql`（清空 `BOOK.FILE_HASH`、`MEDIA_PAGE.FILE_HASH`、`PAGE_HASH`、`PAGE_HASH_THUMBNAIL`；保留 `SYNC_POINT_BOOK.BOOK_FILE_HASH`）
+- 4 处调用点：`BookLifecycle.kt`、`LibraryContentLifecycle.kt`（3 处）
+- 前提：库根必须指向 `content/wnacg/`，否则多一层目录、哈希对不上
+
+### divina ZIP 零 I/O 条目枚举
+- 构建页面列表时不再对每个 ZIP 条目 `getInputStream` 读图片头
+- 改用 `ContentDetector.detectMediaTypeByName()`（Tika 内存查表）+ 中央目录读尺寸
+- 一本 200 页 CBZ 从 200 次网络往返降到 0
+- 加密 ZIP 仍正确识别为 ERROR（检查中央目录 `generalPurposeBit.usesEncryption()`）
+- 代价：阅读器无法预知页面尺寸；按文件名判类型（异构库勿照搬）
+
+### 懒缩略图模式
+- 新增 `KOMGA_THUMBNAIL_MODE`，**默认 `LAZY`**（上游为入库即生成）
+- `LAZY`：入库不生成缩略图，首次请求时按需生成
+- `AUTO`：上游行为
+- ⚠️ 合并上游时须逐行核对 `KomgaProperties.kt`，防默认值被改回
+
+### 外部 ComicInfo.xml 导入
+- 支持读取书本同级目录的 `ComicInfo.xml`（部分下载源将元数据外置）
+- 开关 `Library.importComicInfoExternalXml`，**默认 `false`**
+- 迁移脚本 `V20261009120000__library_comicinfo_external_xml.sql`
+- 外部文件优先于内嵌；新增 3 个测试，合计 31 个全绿
+
+### 文档与仓库整理
+- README 重写为独立分支定位，移除上游社区徽章（Discord / OpenCollective / Weblate）
+- `docs/FORK.md`：四项改造的设计、提交号、风险与上游同步清单
+- `docs/PLAN.md`：重建计划
+- 移除 `upstream` remote 与全部上游分支引用（`native`、`next-ui` 等），
+  三条已合入 master 的 `feat/*` 分支一并清理
+
+## 部署
+- 库根：`/opt/clouddrive2/115open/comic`
+- 平台：Dell MX Linux，裸 jar，端口 25600
+- 与 LANraragi 挂载同一份数据，两边文件身份互通
+
+---
+
 # [1.27.0](https://github.com/gotson/komga/compare/1.26.3...1.27.0) (2026-09-17)
 ## 🚀 Features
 **api**

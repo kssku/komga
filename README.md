@@ -18,7 +18,7 @@ Komga 是一个漫画、日漫、BD、杂志和电子书媒体服务器。
 | **懒缩略图模式** | `KOMGA_THUMBNAIL_MODE=lazy` 关闭入库时自动抽页生成 |
 | **外部 ComicInfo.xml 导入** | 支持读取书本同级目录的 `ComicInfo.xml`（library 级开关） |
 
-完整设计与验证记录见 [`FORK_PLAN.md`](./FORK_PLAN.md)。
+完整设计与验证记录见 [`docs/FORK.md`](./docs/FORK.md)。
 
 ## 使用场景
 
@@ -46,19 +46,20 @@ Komga 是一个漫画、日漫、BD、杂志和电子书媒体服务器。
 
 ## Installation
 
-Refer to the [website](https://komga.org/docs/category/installation) for instructions.
+本分支为**裸 jar 部署**，不走上游官方安装渠道。构建与运行步骤见 [`docs/PLAN.md`](./docs/PLAN.md)。
 
 ## Documentation
 
-Head over to our [website](https://komga.org) for more information.
+本分支自己的文档在 [`docs/`](./docs) 目录：
+
+- [`docs/FORK.md`](./docs/FORK.md) —— fork 改动与设计
+- [`docs/PLAN.md`](./docs/PLAN.md) —— 重做总纲与阶段计划
+
+上游官方文档（komga.org）描述的是上游版本，与本分支的改动不完全一致，仅供参考。
 
 ## Develop in Komga
 
 Check the [development guidelines](./DEVELOPING.md).
-
-## Translation
-
-[![Translation status](https://hosted.weblate.org/widgets/komga/-/webui/horizontal-auto.svg)](https://hosted.weblate.org/engage/komga/)
 
 ## Powered by
 
