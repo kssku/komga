@@ -29,6 +29,27 @@ class KomgaProperties {
   @Positive
   var pageHashing: Int = 3
 
+  /**
+   * Thumbnail generation mode.
+   *
+   * CUSTOM FORK: on remote/FUSE mounts (CloudDrive2 over 115), generating a thumbnail
+   * on ingest reads the archive contents (to extract the first page), which is exactly
+   * what the zero-I/O scan path avoids. `lazy` (default) skips ingest-time generation,
+   * so a full-library scan never opens an archive. Thumbnails then come either from
+   * external sources or on-demand generation.
+   *
+   * - `lazy` (default): do NOT generate thumbnails on ingest
+   * - `auto`: upstream behaviour, generate on ingest
+   *
+   * Set via environment variable `KOMGA_THUMBNAIL_MODE`.
+   */
+  var thumbnailMode: ThumbnailMode = ThumbnailMode.LAZY
+
+  enum class ThumbnailMode {
+    LAZY,
+    AUTO,
+  }
+
   @Positive
   var epubDivinaLetterCountThreshold: Int = 15
 

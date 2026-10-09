@@ -72,7 +72,10 @@ class Hasher {
    * This rule is deliberately kept in one place; it is the single most fragile part of
    * the interop and must not be duplicated across call sites.
    */
-  fun computePathHash(path: Path, libraryRoot: URL): String {
+  fun computePathHash(
+    path: Path,
+    libraryRoot: URL,
+  ): String {
     val root = libraryRoot.toURI().toPath().normalize()
     val base = root.parent ?: root
     val relative = base.relativize(path.normalize()).toString()

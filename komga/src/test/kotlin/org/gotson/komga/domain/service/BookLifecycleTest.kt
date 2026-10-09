@@ -289,6 +289,41 @@ class BookLifecycleTest(
     }
   }
 
+  @Test
+  fun `given a book without thumbnail when getting thumbnail bytes in lazy mode then it generates on demand`() {
+    // given
+    makeSeries(name = "series", libraryId = library.id).let { series ->
+      seriesLifecycle.createSeries(series).let { created ->
+        val books = listOf(makeBook("1", libraryId = library.id))
+        seriesLifecycle.addBooks(created, books)
+      }
+    }
+
+    val book = bookRepository.findAll().first()
+    val generatedBytes = "generated-thumbnail".toByteArray()
+    every { mockAnalyzer.generateThumbnail(any()) } returns
+      ThumbnailBook(
+        thumbnail = generatedBytes,
+        type = ThumbnailBook.Type.GENERATED,
+        mediaType = "image/jpeg",
+        fileSize = generatedBytes.size.toLong(),
+        dimension = Dimension(100, 100),
+        bookId = book.id,
+      )
+
+    // when
+    val bytes = bookLifecycle.getThumbnailBytes(book.id)
+
+    // then
+    assertThat(bytes).isNotNull
+    assertThat(bytes!!.bytes).isEqualTo(generatedBytes)
+    verify(exactly = 1) { mockAnalyzer.generateThumbnail(any()) }
+
+    val thumbnail = thumbnailBookRepository.findSelectedByBookIdOrNull(book.id)
+    assertThat(thumbnail).isNotNull
+    assertThat(thumbnail!!.type).isEqualTo(ThumbnailBook.Type.GENERATED)
+  }
+
   @Nested
   inner class Progression {
     @BeforeEach

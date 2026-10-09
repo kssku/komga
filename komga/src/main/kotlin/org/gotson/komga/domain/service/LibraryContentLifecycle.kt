@@ -375,11 +375,15 @@ class LibraryContentLifecycle(
       if (deletedCandidates.isNotEmpty()) {
         // if the book has no hash, compute the hash and store it
         val bookWithHash =
-          if (bookToAdd.fileHash.isNotBlank())
+          if (bookToAdd.fileHash.isNotBlank()) {
             bookToAdd
-          else
+          } else {
             // CUSTOM FORK (feat/sha1-relpath-hash): path-relative hash, no file I/O.
-            bookRepository.findByIdOrNull(bookToAdd.id)!!.copy(fileHash = hasher.computePathHash(bookToAdd.path, library.root)).also { bookRepository.update(it) }
+            val persisted = bookRepository.findByIdOrNull(bookToAdd.id)!!
+            val hashed = persisted.copy(fileHash = hasher.computePathHash(bookToAdd.path, library.root))
+            bookRepository.update(hashed)
+            hashed
+          }
 
         val match = deletedCandidates.find { it.fileHash == bookWithHash.fileHash }
 

@@ -30,6 +30,7 @@ import org.gotson.komga.domain.persistence.MediaRepository
 import org.gotson.komga.domain.persistence.ReadListRepository
 import org.gotson.komga.domain.persistence.ReadProgressRepository
 import org.gotson.komga.domain.persistence.ThumbnailBookRepository
+import org.gotson.komga.infrastructure.configuration.KomgaProperties
 import org.gotson.komga.infrastructure.configuration.KomgaSettingsProvider
 import org.gotson.komga.infrastructure.hash.Hasher
 import org.gotson.komga.infrastructure.hash.KoreaderHasher
@@ -72,6 +73,7 @@ class BookLifecycle(
   private val hasherKoreader: KoreaderHasher,
   private val historicalEventRepository: HistoricalEventRepository,
   private val komgaSettingsProvider: KomgaSettingsProvider,
+  private val komgaProperties: KomgaProperties,
   @Qualifier("pdfImageType")
   private val pdfImageType: ImageType,
 ) {
@@ -101,7 +103,18 @@ class BookLifecycle(
 
     eventPublisher.publishEvent(DomainEvent.BookUpdated(book))
 
-    return if (media.status == Media.Status.READY) setOf(BookAction.GENERATE_THUMBNAIL, BookAction.REFRESH_METADATA) else emptySet()
+    return if (media.status == Media.Status.READY) {
+      // CUSTOM FORK: in lazy thumbnail mode, skip eager thumbnail generation during scan.
+      // Thumbnails are then produced on demand (when the book is first opened).
+      if (komgaProperties.thumbnailMode == KomgaProperties.ThumbnailMode.LAZY) {
+        logger.debug { "Thumbnail mode is lazy, skipping thumbnail generation during analysis for book: $book" }
+        setOf(BookAction.REFRESH_METADATA)
+      } else {
+        setOf(BookAction.GENERATE_THUMBNAIL, BookAction.REFRESH_METADATA)
+      }
+    } else {
+      emptySet()
+    }
   }
 
   fun hashAndPersist(book: Book) {
@@ -221,6 +234,24 @@ class BookLifecycle(
   fun getThumbnailBytes(
     bookId: String,
     resizeTo: Int? = null,
+  ): TypedBytes? {
+    readThumbnailBytes(bookId, resizeTo)?.let { return it }
+
+    // CUSTOM FORK: in lazy thumbnail mode, thumbnails are not generated during scan.
+    // Generate on demand the first time a missing thumbnail is requested.
+    if (komgaProperties.thumbnailMode == KomgaProperties.ThumbnailMode.LAZY) {
+      val book = bookRepository.findByIdOrNull(bookId) ?: return null
+      logger.info { "Thumbnail missing for book $bookId, generating on demand (lazy mode)" }
+      generateThumbnailAndPersist(book)
+      return readThumbnailBytes(bookId, resizeTo)
+    }
+
+    return null
+  }
+
+  private fun readThumbnailBytes(
+    bookId: String,
+    resizeTo: Int?,
   ): TypedBytes? {
     getThumbnail(bookId)?.let {
       val thumbnailBytes =

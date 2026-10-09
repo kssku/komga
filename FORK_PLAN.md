@@ -413,9 +413,71 @@ if (entries.any { it.generalPurposeBit.usesEncryption() }) {
 
 ---
 
+## 9. 2026-10 目录结构变更的影响
+
+### 9.1 新结构（实测）
+
+```
+/opt/clouddrive2/115open/
+├── content/                    ← 漫画本体（新增层级）
+│   ├── wnacg/
+│   │   ├── oneshots/           ← 新增：单本
+│   │   │   ├── 1-50000/
+│   │   │   └── 100001-150000/
+│   │   └── series/             ← 新增：系列
+│   │       ├── 1-50000/
+│   │       └── ...
+│   ├── pika/
+│   └── jmacg/
+├── thumb/                      ← 封面（旧，将重建）
+│   └── {hash[0:2]}/{hash}.jpg  ← 按哈希前 2 位分片
+└── pika/
+```
+
+**与旧结构（`FORK_PLAN` §2 记录）的差异**：
+
+| | 旧 | 新 |
+|---|---|---|
+| 库根 | `.../comic/wnacg/` | `.../content/wnacg/` |
+| 层 | `wnacg/{分片}/{id}.cbz` | `wnacg/{oneshots,series}/{分片}/{id}.cbz` |
+| 来源 | 仅 wnacg | wnacg + pika + jmacg 并列 |
+
+### 9.2 对哈希算法的影响：**逻辑无问题，代码无需改**
+
+`Hasher.computePathHash(path, libraryRoot)` 的实现是**结构无关**的：
+
+```kotlin
+val base = libraryRoot.toURI().toPath().normalize().parent ?: root
+val relative = base.relativize(path.normalize()).toString()
+return SHA1(UTF-8(relative))
+```
+
+任何目录结构都能算，只要「基准目录」与「文件位置」在同一台机器上一致。
+
+### 9.3 后果：新旧哈希不通用（**已接受**）
+
+结构变了 → 相对路径变了 → **哈希值必然改变**。
+
+- 决策（2026-10）：**以新逻辑为准**，不追求与旧哈希兼容。
+- 迁移方式：沿用 §4 阶段 3 的**清空重算**（`update BOOK set FILE_HASH=''`）。
+- §2 的 1849 条对拍基准**对应旧结构，已失效**；如需与 lrr 重新互认，须用新结构重新对拍。
+
+### 9.4 待确认（不影响算法成立，只影响具体哈希值）
+
+1. **Komga library root 指向哪一层？**（`content/wnacg/`？`content/`？）
+   —— 决定「父目录基准」，从而决定具体哈希值。
+2. **`oneshots` / `series` 是否属于文件身份的一部分？**
+   —— 若属于（即参与哈希），则它们必须稳定；若只是物理归类，则换层会改哈希。
+
+> 这两项**不影响「逻辑有无问题」的结论**（逻辑没问题），只影响「算出来的具体值是什么」。
+
+---
+
 ## 附录：验证脚本
 
 对拍数据与脚本见 `komga-notes/legacy-inject/`：
 
-- `/tmp/lrr-pairs.txt` —— 1849 条 LRR 真实 `id → 路径`
+- `/tmp/lrr-pairs.txt` —— 1849 条 LRR 真实 `id → 路径`（**对应旧结构**）
 - 提取方法：解析 `appendonly.aof.5.incr.aof` 的 RESP token 流
+
+新结构下的候选哈希脚本：`/tmp/hash_candidates.sh`（本次会话产出）
