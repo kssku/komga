@@ -91,6 +91,7 @@ class LibraryDao(
       .set(l.IMPORT_COMICINFO_COLLECTION, library.importComicInfoCollection)
       .set(l.IMPORT_COMICINFO_READLIST, library.importComicInfoReadList)
       .set(l.IMPORT_COMICINFO_SERIES_APPEND_VOLUME, library.importComicInfoSeriesAppendVolume)
+      .set(l.IMPORT_COMICINFO_EXTERNAL_XML, library.importComicInfoExternalXml)
       .set(l.IMPORT_EPUB_BOOK, library.importEpubBook)
       .set(l.IMPORT_EPUB_SERIES, library.importEpubSeries)
       .set(l.IMPORT_MYLAR_SERIES, library.importMylarSeries)
@@ -128,6 +129,7 @@ class LibraryDao(
       .set(l.IMPORT_COMICINFO_COLLECTION, library.importComicInfoCollection)
       .set(l.IMPORT_COMICINFO_READLIST, library.importComicInfoReadList)
       .set(l.IMPORT_COMICINFO_SERIES_APPEND_VOLUME, library.importComicInfoSeriesAppendVolume)
+      .set(l.IMPORT_COMICINFO_EXTERNAL_XML, library.importComicInfoExternalXml)
       .set(l.IMPORT_EPUB_BOOK, library.importEpubBook)
       .set(l.IMPORT_EPUB_SERIES, library.importEpubSeries)
       .set(l.IMPORT_MYLAR_SERIES, library.importMylarSeries)
@@ -183,6 +185,7 @@ class LibraryDao(
       importComicInfoCollection = importComicinfoCollection,
       importComicInfoReadList = importComicinfoReadlist,
       importComicInfoSeriesAppendVolume = importComicinfoSeriesAppendVolume,
+      importComicInfoExternalXml = importComicinfoExternalXml,
       importEpubBook = importEpubBook,
       importEpubSeries = importEpubSeries,
       importMylarSeries = importMylarSeries,

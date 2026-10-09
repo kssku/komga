@@ -9,5 +9,6 @@ interface SeriesMetadataFromBookProvider : MetadataProvider {
   fun getSeriesMetadataFromBook(
     book: BookWithMedia,
     appendVolumeToTitle: Boolean,
+    importExternalXml: Boolean = false,
   ): SeriesMetadataPatch?
 }

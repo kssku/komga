@@ -111,6 +111,7 @@ class EpubMetadataProvider(
   override fun getSeriesMetadataFromBook(
     book: BookWithMedia,
     appendVolumeToTitle: Boolean,
+    importExternalXml: Boolean,
   ): SeriesMetadataPatch? {
     if (book.media.mediaType != MediaType.EPUB.type) return null
     getPackageFileContent(book.book.path)?.let { packageFile ->

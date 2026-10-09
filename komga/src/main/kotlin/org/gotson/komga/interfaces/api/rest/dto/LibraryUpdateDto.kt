@@ -19,6 +19,7 @@ class LibraryUpdateDto {
   val importComicInfoCollection: Boolean? = null
   val importComicInfoReadList: Boolean? = null
   val importComicInfoSeriesAppendVolume: Boolean? = null
+  val importComicInfoExternalXml: Boolean? = null
   val importEpubBook: Boolean? = null
   val importEpubSeries: Boolean? = null
   val importMylarSeries: Boolean? = null

@@ -21,6 +21,7 @@ import org.gotson.komga.infrastructure.metadata.comicrack.dto.Manga
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import java.net.URI
+import java.nio.file.Files
 import java.time.LocalDate
 
 private val logger = KotlinLogging.logger {}
@@ -127,8 +128,9 @@ class ComicInfoProvider(
   override fun getSeriesMetadataFromBook(
     book: BookWithMedia,
     appendVolumeToTitle: Boolean,
+    importExternalXml: Boolean,
   ): SeriesMetadataPatch? {
-    getComicInfo(book)?.let { comicInfo ->
+    getComicInfo(book, importExternalXml)?.let { comicInfo ->
       val readingDirection =
         when (comicInfo.manga) {
           Manga.NO -> SeriesMetadata.ReadingDirection.LEFT_TO_RIGHT
@@ -171,8 +173,15 @@ class ComicInfoProvider(
       MetadataPatchTarget.COLLECTION -> library.importComicInfoCollection
     }
 
-  private fun getComicInfo(book: BookWithMedia): ComicInfo? {
+  private fun getComicInfo(
+    book: BookWithMedia,
+    importExternalXml: Boolean = false,
+  ): ComicInfo? {
     try {
+      if (importExternalXml) {
+        readExternalComicInfo(book)?.let { return it }
+      }
+
       if (book.media.files.none { it.fileName == COMIC_INFO }) {
         logger.debug { "Book does not contain any $COMIC_INFO file: $book" }
         return null
@@ -184,6 +193,18 @@ class ComicInfoProvider(
       logger.error(e) { "Error while retrieving metadata from $COMIC_INFO" }
       return null
     }
+  }
+
+  /**
+   * Reads a [COMIC_INFO] file sitting next to the book archive on disk,
+   * instead of the one embedded inside the archive.
+   */
+  private fun readExternalComicInfo(book: BookWithMedia): ComicInfo? {
+    val external = book.book.path.resolveSibling(COMIC_INFO)
+    if (!Files.isRegularFile(external)) return null
+
+    logger.debug { "Reading external $COMIC_INFO: $external" }
+    return Files.newInputStream(external).use { mapper.readValue(it, ComicInfo::class.java) }
   }
 
   private fun String.splitWithRole(role: String) =
