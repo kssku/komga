@@ -1,16 +1,30 @@
-[![Open Collective backers and sponsors](https://img.shields.io/opencollective/all/komga?label=OpenCollective%20Sponsors&color=success)](https://opencollective.com/komga) [![GitHub Sponsors](https://img.shields.io/github/sponsors/gotson?label=Github%20Sponsors&color=success)](https://github.com/sponsors/gotson)
-[![Discord](https://img.shields.io/discord/678794935368941569?label=Discord&color=blue)](https://discord.gg/TdRpkDu)
+# ![app icon](./.github/readme-images/app-icon.png) Komga（个人独立分支）
 
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/gotson/komga?color=blue&label=download&sort=semver)](https://github.com/gotson/komga/releases) [![GitHub all releases](https://img.shields.io/github/downloads/gotson/komga/total?color=blue&label=github%20downloads)](https://github.com/gotson/komga/releases)
-[![Docker Pulls](https://img.shields.io/docker/pulls/gotson/komga)](https://hub.docker.com/r/gotson/komga)
+> **这是一个独立分支，不是上游 Komga 的补丁集。**
+>
+> 基于 [gotson/komga](https://github.com/gotson/komga) 分叉，专为**网盘挂载场景**
+> （115 网盘 / CloudDrive2 FUSE）改造，与上游各自演进。
+> 上游的社区渠道（Discord、OpenCollective 赞助、Weblate 翻译）**与本分支无关**，
+> 相关问题请勿打扰上游维护者。
 
-[![Translation status](https://hosted.weblate.org/widgets/komga/-/webui/svg-badge.svg)](https://hosted.weblate.org/engage/komga/)
+Komga 是一个漫画、日漫、BD、杂志和电子书媒体服务器。
 
-# ![app icon](./.github/readme-images/app-icon.png) Komga
+## 本分支相对上游的改动
 
-Komga is a media server for your comics, mangas, BDs, magazines and eBooks.
+| 改造 | 说明 |
+|------|------|
+| **SHA-1 相对路径哈希** | 文件身份改为 `SHA1(相对路径)`，零 I/O，与 LANraragi 逐字节互认 |
+| **divina ZIP 零 I/O 枚举** | 去掉逐条目 `getInputStream`，改为按条目名判类型 + 中央目录读尺寸 |
+| **懒缩略图模式** | `KOMGA_THUMBNAIL_MODE=lazy` 关闭入库时自动抽页生成 |
+| **外部 ComicInfo.xml 导入** | 支持读取书本同级目录的 `ComicInfo.xml`（library 级开关） |
 
-#### Chat on [Discord](https://discord.gg/TdRpkDu)
+完整设计与验证记录见 [`FORK_PLAN.md`](./FORK_PLAN.md)。
+
+## 使用场景
+
+- 库根：`/opt/clouddrive2/115open/comic`（115 网盘经 CloudDrive2 挂载）
+- 部署：Dell MX Linux，裸 jar 运行，端口 25600
+- 与 LANraragi 挂载同一份数据，两边文件身份互通
 
 ## Features
 
