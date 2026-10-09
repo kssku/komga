@@ -160,6 +160,44 @@ JAVA_TOOL_OPTIONS="-Xmx4g" ./gradlew :komga:compileKotlin --no-daemon
 JAVA_TOOL_OPTIONS="-Xmx4g" ./gradlew :komga:build -x test --no-daemon
 ```
 
+### 3.1 ⚠️ 版本号曾兼任构建开关（1.0.0 出包踩坑）
+
+**现象**：切到 `version=1.0.0` 后，`:komga:kspKotlin` 以 `PROCESSING_ERROR` 失败，
+报 89 处上游 `@Deprecated` 为 error（`Deprecated code should be removed`），
+分布在 `ReferentialV1Controller.kt`、`ReferentialDao.kt`、`SeriesController.kt` 等 10 个文件。
+**均为上游代码，非本 fork 改动。**
+
+**根因**：上游 `komga/build.gradle.kts` 把注解处理器的开关写成了版本号判断：
+
+```kotlin
+if (version.toString().endsWith(".0.0")) {
+  ksp("com.github.gotson.bestbefore:bestbefore-processor-kotlin:0.2.0")
+}
+```
+
+上游版本号一直是 `1.x.y`，条件**恒假**，processor 从未加载。
+本 fork 改成 `1.0.0` 后条件**首次为真**，processor 在 Kotlin 2.4 下
+把上游那些刻意保留的 `@Deprecated` 全判为 error。
+
+**反直觉之处**：改版本号本身没错，错在版本号被当成构建开关用。
+不先看 `build.gradle.kts` 就追 KSP/编译参数，会一路白追。
+
+**修复**（提交 `4fcec1ec`）：判据与版本号解耦，默认关闭（与上游 1.x 实际行为一致）：
+
+```kotlin
+if (providers.gradleProperty("bestbefore").orNull == "true") {
+  ksp("com.github.gotson.bestbefore:bestbefore-processor-kotlin:0.2.0")
+}
+```
+
+需要该 processor 时显式传 `-Pbestbefore=true`。
+
+**同轮修复**：上游从 kapt 迁到 ksp 时漏给 `kspKotlin` 声明对 `generateTasksJooq`
+的依赖，Gradle 9 把隐式依赖升级为硬失败；已在 `tasks.whenTaskAdded` 中补 `dependsOn`。
+
+**验证**：`./gradlew :komga:webuiCopyIndex :komga:nextuiCopyIndex :komga:bootJar :komga-tray:jar`
+→ `BUILD SUCCESSFUL in 43s`，产物 `komga-1.0.0.jar` (117 MB) / `komga-tray-1.0.0.jar` (58 KB)。
+
 ---
 
 ## 4. ⚠️ 待确认：库根层级
