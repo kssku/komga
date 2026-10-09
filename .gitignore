@@ -60,3 +60,6 @@ secret/
 
 ### Kilo
 /.kilo/
+
+# 本地测试实例数据目录
+.test-komga/
