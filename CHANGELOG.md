@@ -46,6 +46,31 @@
 - 平台：Dell MX Linux，裸 jar，端口 25600
 - 与 LANraragi 挂载同一份数据，两边文件身份互通
 
+## 构建状态：**未通过**（已知问题）
+
+> ⚠️ **本版本没有产出可运行的 jar。**版本号、文档、代码是真实的，但构建未验证通过。
+
+**环境**：Gradle 9.6.1 / Kotlin 2.4.10 / JDK 21.0.12
+
+**唯一失败任务**：` :komga:kspKotlin `（KSP failed with exit code: PROCESSING_ERROR）
+
+**现象**：KSP 处理阶段对 89 处 `@Deprecated` 标注报 `Deprecated code should be removed`，
+分布在上游刻意保留的 v1 兼容 API（`ReferentialV1Controller.kt`、`ReferentialDao.kt`、
+`SeriesController.kt` 等 10 个文件）。**这些都是上游代码，非本分支改动。**
+
+**已排除的原因**：
+- 不是 ktlint（报错格式不符，且 `.editorconfig` 无相关配置）
+- 不是 Kotlin 编译选项（项目脚本里无 `allWarningsAsErrors` / `-Werror`）
+- 不是本分支引入（本分支仅改版本号/README/CHANGELOG 三个文件）
+
+**已做的修复（保留）**：`komga/build.gradle.kts` 中给 `kspKotlin` 补了
+`dependsOn("generateTasksJooq")` —— 上游从 kapt 迁到 ksp 时漏了这一条，
+Gradle 9 将隐式依赖升级为硬失败。此修复有效（原隐式依赖报错消失），
+但 KSP 处理错误依然存在。
+
+**下一步方向（未验证）**：排查 KSP processor 为何把 deprecation 诊断为 error，
+可能需要 `ksp { arg(...) }` 传参或升级 KSP 版本。
+
 ---
 
 # [1.27.0](https://github.com/gotson/komga/compare/1.26.3...1.27.0) (2026-09-17)

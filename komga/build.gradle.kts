@@ -374,6 +374,13 @@ tasks.whenTaskAdded {
   if (name == "kaptGenerateStubsKotlin") {
     dependsOn("generateTasksJooq")
   }
+  // FIX(fork): KSP's generated task reads build/generated-src/jooq/tasks without
+  // declaring a dependency on generateTasksJooq. Upstream declared it for kapt but
+  // missed the ksp migration; Gradle 9 turns that implicit dependency into a hard
+  // failure. Harmless and required on older Gradle too.
+  if (name == "kspKotlin") {
+    dependsOn("generateTasksJooq")
+  }
 }
 
 tasks.runKtlintFormatOverMainSourceSet {
