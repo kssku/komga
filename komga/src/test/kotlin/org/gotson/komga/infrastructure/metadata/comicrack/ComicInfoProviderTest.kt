@@ -18,6 +18,10 @@ import org.gotson.komga.infrastructure.metadata.comicrack.dto.ComicInfo
 import org.gotson.komga.infrastructure.metadata.comicrack.dto.Manga
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.net.URL
+import java.nio.file.Files
+import java.nio.file.Path
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
@@ -515,6 +519,75 @@ class ComicInfoProviderTest {
         assertThat(language).isNull()
         assertThat(publisher).isNull()
         assertThat(collections).isEmpty()
+      }
+    }
+
+    @TempDir
+    lateinit var tempDir: Path
+
+    private fun writeExternalComicInfoFile(content: String): BookWithMedia {
+      val bookFile = tempDir.resolve("book.cbz")
+      Files.write(bookFile, ByteArray(0))
+      Files.write(tempDir.resolve("ComicInfo.xml"), content.toByteArray())
+      return BookWithMedia(makeBook("book", url = bookFile.toUri().toURL()), media)
+    }
+
+    private val realProvider = ComicInfoProvider(XmlMapper(), mockAnalyzer, isbnValidator)
+
+    @Test
+    fun `given external comic info and importExternalXml when getting series metadata then external file is used`() {
+      val bookWithMedia =
+        writeExternalComicInfoFile(
+          """
+          <?xml version="1.0" encoding="utf-8"?>
+          <ComicInfo>
+            <Series>external series</Series>
+          </ComicInfo>
+          """.trimIndent(),
+        )
+
+      val patch = realProvider.getSeriesMetadataFromBook(bookWithMedia, true, true)!!
+
+      with(patch) {
+        assertThat(title).isEqualTo("external series")
+      }
+    }
+
+    @Test
+    fun `given external comic info and no importExternalXml when getting series metadata then external file is ignored`() {
+      val bookWithMedia =
+        writeExternalComicInfoFile(
+          """
+          <?xml version="1.0" encoding="utf-8"?>
+          <ComicInfo>
+            <Series>external series</Series>
+          </ComicInfo>
+          """.trimIndent(),
+        )
+
+      val comicInfo = ComicInfo().apply { series = "embedded series" }
+      every { mockMapper.readValue(any<ByteArray>(), ComicInfo::class.java) } returns comicInfo
+
+      val patch = comicInfoProvider.getSeriesMetadataFromBook(bookWithMedia, true, false)!!
+
+      with(patch) {
+        assertThat(title).isEqualTo("embedded series")
+      }
+    }
+
+    @Test
+    fun `given no external comic info and importExternalXml when getting series metadata then embedded file is used`() {
+      val bookFile = tempDir.resolve("book.cbz")
+      Files.write(bookFile, ByteArray(0))
+      val bookWithMedia = BookWithMedia(makeBook("book", url = bookFile.toUri().toURL()), media)
+
+      val comicInfo = ComicInfo().apply { series = "embedded series" }
+      every { mockMapper.readValue(any<ByteArray>(), ComicInfo::class.java) } returns comicInfo
+
+      val patch = comicInfoProvider.getSeriesMetadataFromBook(bookWithMedia, true, true)!!
+
+      with(patch) {
+        assertThat(title).isEqualTo("embedded series")
       }
     }
   }
