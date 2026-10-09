@@ -1,8 +1,27 @@
-# Komga Fork Plan — SHA-1 相对路径哈希
+# Komga Fork Plan — 全部本地改造
 
-> 分支：`feat/sha1-relpath-hash`（基于 `origin/master` @ `c7d353a7`）
-> 起点：干净上游，无本地提交
-> 目标：与 LANraragi fork（`kssku/lrr-custom`）哈希体系互认
+> 上游：`origin/master` @ `c7d353a7`（分叉基点）
+> 本地：`kssku/komga`（remote `fork`）
+> 目标：让 Komga 在 115 网盘（CloudDrive2 FUSE 挂载）上可用 —— 零 I/O 扫描、
+> 与 LANraragi 哈希互认、外部元数据可导入。
+> 使用场景：Dell `mx`，库根 `/opt/clouddrive2/115open/comic`，端口 25600。
+
+---
+
+## 0. 改造总览
+
+本 fork 相对上游共 **7 个提交**，归为四项功能改造 + 一项杂项：
+
+| # | 主题 | 提交 | 分支 | 状态 |
+|---|------|------|------|------|
+| 1 | SHA-1 相对路径哈希（与 LANraragi 互认） | `2b1e76fa` + `f346b30d` | `feat/sha1-relpath-hash` | ✅ 已推 fork |
+| 2 | divina ZIP 零 I/O 条目枚举 | `a10e7aad` | `feat/sha1-relpath-hash` | ✅ 已推 fork |
+| 3 | 懒缩略图（远程/FUSE 模式） | `dd058334` | `feat/sha1-relpath-hash` | ✅ 已推 fork |
+| 4 | 外部 ComicInfo.xml 导入 | `12b56af6` + `20efaccd` | `feat/library-external-comicinfo-xml` | ✅ 已推 fork，PR 未开 |
+| — | 忽略本地测试实例数据目录 | `57731e11` | 同上 | ✅ 已推 fork |
+
+> 分节索引：§1–§9 是**改造 1 + 2** 的完整设计与验证；改造 3 见 §10；
+> 改造 4 见 §11；待办与上游同步清单见 §12。
 
 ---
 
@@ -470,6 +489,116 @@ return SHA1(UTF-8(relative))
    —— 若属于（即参与哈希），则它们必须稳定；若只是物理归类，则换层会改哈希。
 
 > 这两项**不影响「逻辑有无问题」的结论**（逻辑没问题），只影响「算出来的具体值是什么」。
+
+---
+
+## 10. 第三项改造：懒缩略图模式（远程 / FUSE 挂载）
+
+> 提交 `dd058334` `feat(thumbnail): lazy thumbnail mode for remote/FUSE mounts`
+> 详细设计另见 `THUMBNAIL_LAZY_DESIGN.md`（251 行，本节的来源）。
+
+### 10.1 问题
+
+上游在**入库扫描时**就抽页生成缩略图 —— 这是扫描路径上唯一**读 cbz 本体**的热点。
+在 CD2/115 上，一本书一次缩略图 = 一次网络读，扫库时叠加成不可接受的开销。
+
+### 10.2 改动
+
+| 文件 | 改动 |
+|---|---|
+| `KomgaProperties.kt` | 新增 `KOMGA_THUMBNAIL_MODE`（+21 行），`lazy` 关闭入库时自动生成 |
+| `BookLifecycle.kt` | 生成时机改为按需（+33 行） |
+| `LibraryContentLifecycle.kt` | 跟随调整（+10 行） |
+| `Hasher.kt` | 配套微调（+5 行） |
+| `tools/make-lazy-testdata.sh` | 造测试数据（+66 行） |
+| `tools/run-test-instance.sh` | 起本地测试实例（+22 行） |
+
+### 10.3 外部封面 Provider（设计已定，实现待做）
+
+浏览时读**独立封面目录**的小图，cbz 本体仍只在阅读时读。封面路径规则：
+
+```
+{外部封面根}/{book.fileHash}.{ext}
+```
+
+`book.fileHash` = `SHA1(相对路径)`，40 位小写十六进制（与 LRR `compute_id` 一致，见 §7.1）。
+
+**时序陷阱（必须处理）**：`fileHash` 由 `hashAndPersist` 异步补（`BookLifecycle.kt:113-116`），
+受 library `hashFiles` 开关控制。Provider 遇到空 `fileHash` 必须返回空，**不得**拼出 `/.jpg` 这类无效路径。
+
+**为何不用上游 SIDECAR**：`LocalArtworkProvider.kt:36-47` 只支持「书同目录、同名前缀」，
+不递归、不跨目录；本场景封面集中在独立目录树，需**新增 Provider**（拟名 `ExternalCoverArtworkProvider`）。
+
+**分片是硬需求**：FUSE 上单目录十万项会让 `Files.list` 慢到不可用，须按 `{hash 前 2 位}/{hash}.jpg` 分片。
+
+**仍待确认**：外部封面根绝对路径、分片规则、扩展名查找顺序。
+
+---
+
+## 11. 第四项改造：外部 ComicInfo.xml 导入
+
+> 提交 `12b56af6`（功能）+ `20efaccd`（测试）
+> 分支 `feat/library-external-comicinfo-xml`
+
+### 11.1 动机
+
+部分下载源把元数据放在 **cbz 同级目录**的 `ComicInfo.xml`，而非内嵌在压缩包里。
+上游只读内嵌的，导致这类书元数据丢失。
+
+### 11.2 改动链路（完整贯穿各层）
+
+| 层 | 文件 | 改动 |
+|---|---|---|
+| 迁移 | `V20261009120000__library_comicinfo_external_xml.sql` | 新增 library 开关列 |
+| 领域模型 | `Library.kt` | +1 字段 |
+| 持久化 | `LibraryDao.kt` | +3（读写该列） |
+| Provider 抽象 | `SeriesMetadataFromBookProvider.kt` | +1（接口参数） |
+| **核心实现** | `ComicInfoProvider.kt` | +25/-2：读同级外部 xml，优先于内嵌 |
+| 兄弟实现 | `EpubMetadataProvider.kt` | +1（跟随接口） |
+| API | `LibraryController.kt` | +2 |
+| DTO | `LibraryCreationDto.kt` / `LibraryDto.kt` / `LibraryUpdateDto.kt` | 各 +1/+2/+1 |
+
+### 11.3 测试（+73 行，2 个用例）
+
+- 开开关 → 用外部文件（`external series`）
+- 关开关 → 忽略外部文件，仍用内嵌
+
+**踩坑记录（已沉淀进知识库）**：mockk 按**重载签名**分别 stub ——
+外部路径走 `readValue(InputStream, …)`，而既有测试只 stub 了 `readValue(ByteArray, …)`，
+未 stub 的重载静默返回 `null`，报错却指向 `!!` 的 NPE。修法：外部路径这条测试
+改用**真 `XmlMapper()`**（它本就该验证真实解析），不补 mock。
+
+### 11.4 验证
+
+`./gradlew :komga:test --rerun-tasks` → **BUILD SUCCESSFUL in 1m 10s**，31 测试全绿
+（新增 3 个，既有 28 个未破）。
+
+---
+
+## 12. 待办与上游同步
+
+### 12.1 待办
+
+| # | 事项 | 状态 |
+|---|---|---|
+| 1 | 开 PR：`feat/library-external-comicinfo-xml` → `fork` | ⬜ 未开 |
+| 2 | 外部封面 Provider 实现（§10.3，须先定三个参数） | ⬜ 未做 |
+| 3 | `.test-komga/lucene/` 13 个二进制残留在 `dd058334` 历史中 | ⬜ 待决策 |
+| 4 | §9.4 两个待确认项（library root 层级、`oneshots/series` 是否入哈希） | ⬜ 待确认 |
+| 5 | `THUMBNAIL_LAZY_DESIGN.md` 可考虑并入 `docs/` | ⬜ 可选 |
+
+> 关于 #3：`57731e11` 把 `.test-komga/` 加进 `.gitignore` 并**删除**了文件，
+> 但删除在新增的**后一条**提交 —— 那 13 个二进制**永久留在 git 历史**里，
+> 会撑大 clone、rebase 时反复冲突。分支已推 fork 且 PR 未开，是重写历史代价最小的窗口。
+
+### 12.2 上游同步清单
+
+| 改造 | 是否适合上游 | 说明 |
+|---|---|---|
+| SHA-1 相对路径哈希 | ❌ 本 fork 专属 | 语义变更（见 §3.1），上游视 `FILE_HASH` 为内容身份 |
+| divina 零 I/O 枚举 | ⚠️ 视情况 | 均质库成立（§8.3），异构库不可照搬 |
+| 懒缩略图模式 | ✅ 通用 | 远程/FUSE 场景普遍受益 |
+| 外部 ComicInfo.xml | ✅ 通用 | 独立开关，不破坏既有行为 |
 
 ---
 
